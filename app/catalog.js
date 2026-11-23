@@ -71,7 +71,7 @@
     return Array.isArray(value) ? value : [];
   }
 
-  function xtreamItems(source, kind, rows, categories) {
+  function xtreamItems(source, kind, rows, categories, liveFormats) {
     var groups = Object.create(null);
     array(categories).forEach(function (category) {
       if (category) groups[String(category.category_id)] = category.category_name;
@@ -92,7 +92,8 @@
         genre: String(row.genre || ''),
         cast: String(row.cast || ''),
         url: kind === 'series' ? '' : stream(source, kind, id,
-          kind === 'live' ? 'm3u8' : extension(row.container_extension, 'mp4'))
+          kind === 'live' ? liveFormats[0] : extension(row.container_extension, 'mp4')),
+        alternateUrl: kind === 'live' ? stream(source, kind, id, liveFormats[1]) : ''
       };
     });
   }
@@ -149,6 +150,11 @@
           (login.user_info.status && String(login.user_info.status).toLowerCase() !== 'active')) {
         throw new Error('Credenciais recusadas ou conta inativa. Confira os dados com seu provedor.');
       }
+      var advertised = array(login.user_info.allowed_output_formats).map(function (value) {
+        return String(value).toLowerCase();
+      });
+      var liveFormats = advertised.indexOf('ts') >= 0 && advertised.indexOf('m3u8') < 0
+        ? ['ts', 'm3u8'] : ['m3u8', 'ts'];
       return Promise.all(Object.keys(sections).map(function (kind) {
         var config = sections[kind];
         return Promise.all([
@@ -156,7 +162,7 @@
           api(source, config.categories).catch(function () { return []; })
         ]).then(function (results) {
           if (!Array.isArray(results[0])) throw new Error('Catálogo inválido.');
-          return { items: xtreamItems(source, kind, results[0], results[1]) };
+          return { items: xtreamItems(source, kind, results[0], results[1], liveFormats) };
         }).catch(function () {
           return { items: [], failure: config.label };
         });

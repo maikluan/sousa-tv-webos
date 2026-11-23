@@ -4,7 +4,7 @@ Player de IPTV em português para Smart TVs LG com webOS. Use o controle remoto 
 
 - Canais ao vivo, filmes e séries por categoria. Em fontes Xtream, a tela de canal exibe a programação quando o servidor a fornece. Séries Xtream exibem temporadas, episódios e reprodução automática do próximo episódio da temporada.
 - Busca pelos dados disponíveis no catálogo, favoritos e retomada de filmes e episódios.
-- Reprodução pelo player do webOS. A compatibilidade depende do modelo da TV e dos formatos usados pelo provedor. Para canais Xtream, o app solicita HLS (.m3u8).
+- Reprodução pelo player do webOS. A compatibilidade depende do modelo da TV e dos formatos usados pelo provedor. Para canais Xtream, o app alterna entre HLS (.m3u8) e MPEG-TS (.ts) quando necessário e prefere o último formato que funcionou para a fonte na sessão.
 - O app vem sem listas ou assinaturas. Use uma fonte à qual você tenha acesso autorizado.
 
 O aplicativo foi escrito para webOS, com o [Tarta TV para Android](https://github.com/rodolfot/iptv) como referência funcional. Código, imagens e marca do aplicativo Android não integram este projeto. Esta versão cobre os recursos acima. Recursos do Android como PIN parental, perfis múltiplos, time-shift e PiP ficam fora desta versão.
@@ -13,7 +13,7 @@ O aplicativo foi escrito para webOS, com o [Tarta TV para Android](https://githu
 
 ### 1. Baixe o pacote
 
-Na [versão 1.0.0](https://github.com/maikluan/sousa-tv-webos/releases/tag/v1.0.0), baixe **com.sousatv.player_1.0.0_all.ipk** para a pasta Downloads.
+Na [versão mais recente](https://github.com/maikluan/sousa-tv-webos/releases/latest), baixe o arquivo **com.sousatv.player_…_all.ipk** para a pasta Downloads.
 
 ### 2. Ative o Developer Mode na TV
 
@@ -51,10 +51,10 @@ Se o IP mudar, atualize o endereço com `ares-setup-device.cmd --modify lg-sousa
 
 ### 5. Instale, abra e conecte sua lista
 
-No PowerShell, execute os comandos abaixo. Ajuste o caminho do arquivo se o download estiver em outra pasta.
+No PowerShell, execute os comandos abaixo. Use o nome exato do arquivo que você baixou.
 
 ```powershell
-ares-install.cmd --device lg-sousa "$env:USERPROFILE\Downloads\com.sousatv.player_1.0.0_all.ipk"
+ares-install.cmd --device lg-sousa "$env:USERPROFILE\Downloads\com.sousatv.player_1.1.0_all.ipk"
 ares-launch.cmd --device lg-sousa com.sousatv.player
 ```
 
@@ -65,7 +65,9 @@ O **Sousa TV** fica disponível no menu inicial da LG. No app, escolha **Xtream 
 - No app **Developer Mode**, use **Extend** antes de o contador da sessão zerar. Se o modo de desenvolvedor for desativado, o webOS remove os apps instalados por ele. Nesse caso, reative o modo e repita a autorização e a instalação.
 - Se a conexão falhar, confira o IP, a rede local, o **Dev Mode Status** e o **Key Server**. Redes de convidados podem impedir a comunicação entre o PC e a TV.
 - Se o catálogo falhar, confirme os dados de acesso e se o provedor permite requisições do webOS quando houver restrição de CORS. Se o catálogo carregar e um vídeo falhar, confira com o provedor se há uma versão HLS ou MP4 compatível com sua TV.
-- Para atualizar, instale o novo IPK com `ares-install.cmd`, usando o caminho do arquivo novo.
+- Na TV, use **Configurações → Verificar atualização** para consultar a última versão publicada. A instalação do IPK usa o CLI oficial da LG no computador pareado.
+- No Windows com o atalho **Atualizar Sousa TV**, abra o atalho com a TV ligada na mesma rede. Ele verifica a versão instalada, baixa e confere o SHA-256 do IPK publicado, instala a versão mais recente quando necessário e abre o app.
+- Em outro PC, instale o IPK novo por cima com o comando `ares-install.cmd` da etapa 5. Com Node.js 20 ou superior, também é possível executar `node tools/atualizar-sousatv.cjs lg-sousa`. Se o pacote `@webos-tools/cli` foi instalado globalmente, defina `$env:SOUSA_WEBOS_CLI = Join-Path (npm.cmd root -g) '@webos-tools/cli'` antes de rodar o script.
 
 [Developer Mode da LG](https://webostv.developer.lge.com/develop/getting-started/developer-mode-app) · [webOS CLI](https://webostv.developer.lge.com/develop/tools/cli-installation) · [Protocolos de streaming](https://webostv.developer.lge.com/develop/specifications/streaming-protocol-drm)
 
