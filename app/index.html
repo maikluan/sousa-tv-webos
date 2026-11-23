@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>Sousa TV</title>
+  <link rel="stylesheet" href="style.css">
+  <script defer src="catalog.js"></script>
+  <script defer src="app.js"></script>
+</head>
+<body>
+  <header>
+    <div class="brand"><img src="icon.png" alt="">Sousa TV</div>
+    <nav id="navigation" aria-label="Menu principal" hidden></nav>
+  </header>
+  <main id="screen"></main>
+  <section id="player" aria-label="Reprodução" hidden>
+    <video id="video" playsinline></video>
+    <div id="player-panel">
+      <h1 id="playing-title"></h1>
+      <p id="player-status" role="status"></p>
+      <div class="actions" id="player-actions"></div>
+    </div>
+  </section>
+  <div id="exit-overlay" hidden>
+    <section class="login" role="dialog" aria-modal="true" aria-labelledby="exit-title">
+      <h1 id="exit-title">Sair do Sousa TV?</h1>
+      <div class="actions">
+        <button type="button" id="stay">Continuar no Sousa TV</button>
+        <button type="button" id="leave">Sair</button>
+      </div>
+    </section>
+  </div>
+</body>
+</html>
