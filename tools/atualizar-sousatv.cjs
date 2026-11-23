@@ -1,7 +1,7 @@
 'use strict';
 
 const { createHash } = require('node:crypto');
-const { mkdtemp, rm, writeFile } = require('node:fs/promises');
+const { mkdtemp, rm, rmdir, writeFile } = require('node:fs/promises');
 const { spawnSync } = require('node:child_process');
 const { tmpdir } = require('node:os');
 const { join } = require('node:path');
@@ -88,7 +88,7 @@ async function main() {
     console.log('Sousa TV ' + version + ' instalado e aberto na LG.');
   } finally {
     await rm(path, { force: true });
-    await rm(dir);
+    await rmdir(dir);
   }
 }
 
