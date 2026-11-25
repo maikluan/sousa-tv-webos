@@ -9,6 +9,10 @@
   var playerPanel = document.getElementById('player-panel');
   var playerStatus = document.getElementById('player-status');
   var playerActions = document.getElementById('player-actions');
+  var timeline = document.getElementById('player-timeline');
+  var timelineInput = document.getElementById('timeline-position');
+  var timelineElapsed = document.getElementById('timeline-elapsed');
+  var timelineDuration = document.getElementById('timeline-duration');
   var exitOverlay = document.getElementById('exit-overlay');
   var beforeExit;
   var tabs = { home: 'Início', search: 'Buscar', live: 'Ao vivo', movie: 'Filmes',
@@ -20,14 +24,14 @@
   var itemsByKey = Object.create(null);
   var sectionIndex = Object.create(null);
   var updates = window.SousaUpdates;
+  var artworkQueue = [];
+  var artworkLoading = [];
+  var artworkTimer;
   var artworkObserver = window.IntersectionObserver ? new IntersectionObserver(function (entries, observer) {
     entries.forEach(function (entry) {
       if (!entry.isIntersecting && entry.intersectionRatio <= 0) return;
-      var img = entry.target;
-      observer.unobserve(img);
-      if (!screen.contains(img)) return;
-      img.src = img.getAttribute('data-art');
-      img.removeAttribute('data-art');
+      observer.unobserve(entry.target);
+      if (screen.contains(entry.target)) queueArtwork(entry.target);
     });
   }, { root: screen, rootMargin: '48px' }) : null;
   var failures = [];
@@ -40,6 +44,8 @@
   var playing = null;
   var playerTimer;
   var liveStartupTimer;
+  var seekTimer;
+  var pendingSeek = null;
   var preferredLiveFormat = '';
   var loadVersion = 0;
   var infoVersion = 0;
@@ -105,6 +111,59 @@
     if (subtitle) screen.appendChild(message(subtitle));
   }
 
+  function scheduleArtwork(delay) {
+    if (artworkTimer || !artworkQueue.length || artworkLoading.length >= 2) return;
+    artworkTimer = setTimeout(loadArtwork, delay);
+  }
+
+  function queueArtwork(img) {
+    artworkQueue.push(img);
+    scheduleArtwork(160);
+  }
+
+  function unbindArtwork(job) {
+    clearTimeout(job.timer);
+    job.img.onload = null;
+    job.img.onerror = null;
+  }
+
+  function loadArtwork() {
+    artworkTimer = null;
+    if (!artworkQueue.length || artworkLoading.length >= 2) return;
+    var img = artworkQueue.shift();
+    if (screen.contains(img)) {
+      var job = { img: img };
+      artworkLoading.push(job);
+      function finish(loaded) {
+        var index = artworkLoading.indexOf(job);
+        if (index < 0) return;
+        unbindArtwork(job);
+        artworkLoading.splice(index, 1);
+        if (loaded) img.className = 'art-loaded';
+        else img.removeAttribute('src');
+        scheduleArtwork(75);
+      }
+      img.onload = function () { finish(true); };
+      img.onerror = function () { finish(false); };
+      job.timer = setTimeout(function () { finish(false); }, 5500);
+      img.src = img.getAttribute('data-art');
+      img.removeAttribute('data-art');
+    }
+    scheduleArtwork(75);
+  }
+
+  function resetArtwork() {
+    clearTimeout(artworkTimer);
+    artworkTimer = null;
+    artworkQueue = [];
+    if (artworkObserver) artworkObserver.disconnect();
+    artworkLoading.forEach(function (job) {
+      unbindArtwork(job);
+      job.img.removeAttribute('src');
+    });
+    artworkLoading = [];
+  }
+
   function artwork(item) {
     var art = node('span', null, 'art');
     var initials = item.title.trim().slice(0, 2).toUpperCase();
@@ -113,13 +172,11 @@
       var img = node('img');
       img.alt = '';
       img.referrerPolicy = 'no-referrer';
-      img.onerror = function () { img.hidden = true; };
       img.decoding = 'async';
-      if (artworkObserver) {
-        img.setAttribute('data-art', item.art);
-        artworkObserver.observe(img);
-      } else img.src = item.art;
+      img.setAttribute('data-art', item.art);
       art.appendChild(img);
+      if (artworkObserver) artworkObserver.observe(img);
+      else queueArtwork(img);
     }
     return art;
   }
@@ -140,7 +197,7 @@
   }
 
   function clearScreen() {
-    if (artworkObserver) artworkObserver.disconnect();
+    resetArtwork();
     screen.innerHTML = '';
   }
 
@@ -240,6 +297,10 @@
       section.items.push(item);
       if (!section.groups[item.group]) section.groups[item.group] = [];
       section.groups[item.group].push(item);
+    });
+    Object.keys(api.sections).forEach(function (kind) {
+      var section = sectionIndex[kind];
+      section.groupNames = Object.keys(section.groups).sort(function (a, b) { return a.localeCompare(b); });
     });
   }
 
@@ -355,7 +416,7 @@
     var layout = node('div', null, 'layout');
     var sidebar = node('aside', null, 'categories');
     var results = node('section', null, 'results');
-    [null].concat(Object.keys(groups).sort(function (a, b) { return a.localeCompare(b); }))
+    [null].concat(index.groupNames)
       .forEach(function (group, index) {
         var key = 'group-' + index;
         var selector = button(group || 'Todas', function () {
@@ -604,12 +665,15 @@
     }
     if (playing.next) playerActions.appendChild(button('Próximo episódio', nextEpisode, 'next'));
     playerActions.appendChild(button('Voltar ao catálogo', closePlayer, 'close'));
-    if (focus) (findFocus(playerActions, focus) || playerActions.firstChild).focus();
+    if (focus && (focus !== 'timeline' || timeline.hidden)) {
+      (findFocus(playerActions, focus) || playerActions.firstChild).focus();
+    }
   }
 
   function showPanel(forceFocus) {
     clearTimeout(playerTimer);
     playerPanel.hidden = false;
+    updateTimeline();
     if (forceFocus) playerActions.firstChild.focus();
     if (!video.paused && !playing.error) {
       playerTimer = setTimeout(function () { playerPanel.hidden = true; }, 7000);
@@ -633,6 +697,7 @@
     session.attempt++;
     session.started = false;
     session.error = false;
+    resetTimeline();
     var url = session.candidates[session.index];
     playerStatus.textContent = session.index ? 'Tentando outro formato de transmissão…' : 'Abrindo transmissão…';
     video.src = url;
@@ -650,6 +715,7 @@
       return;
     }
     playing.error = true;
+    resetTimeline();
     if (playing.started) video.pause();
     playerStatus.textContent = playing.item.kind === 'live'
       ? 'Este canal não iniciou. Tente novamente ou selecione outro canal.'
@@ -690,14 +756,75 @@
     else video.pause();
   }
 
-  function seek(amount) {
-    if (!isFinite(video.duration)) return;
-    video.currentTime = Math.max(0, Math.min(video.duration, video.currentTime + amount));
+  function canSeek() {
+    return playing && !playing.error && playing.item.kind !== 'live' &&
+      video.readyState >= 1 && isFinite(video.duration) && video.duration >= 1;
   }
+
+  function resetTimeline() {
+    clearTimeout(seekTimer);
+    pendingSeek = null;
+    timeline.hidden = true;
+  }
+
+  function updateTimeline() {
+    if (!canSeek()) {
+      timeline.hidden = true;
+      return;
+    }
+    if (playerPanel.hidden) return;
+    var total = Math.floor(video.duration);
+    var position = pendingSeek === null ? video.currentTime : pendingSeek;
+    var elapsed = Math.max(0, Math.min(total, Math.floor(position)));
+    if (timelineInput.max !== String(total) || timelineInput.value !== String(elapsed) ||
+        timelineElapsed.textContent !== time(elapsed) || timeline.hidden) {
+      timelineInput.max = total;
+      timelineInput.value = elapsed;
+      timelineInput.style.backgroundSize = (elapsed * 100 / total) + '% 100%';
+      timelineElapsed.textContent = time(elapsed);
+      timelineDuration.textContent = time(total);
+      timelineInput.setAttribute('aria-valuetext', time(elapsed) + ' de ' + time(total));
+    }
+    timeline.hidden = false;
+  }
+
+  function commitSeek() {
+    clearTimeout(seekTimer);
+    var target = pendingSeek;
+    pendingSeek = null;
+    if (target !== null && canSeek()) {
+      try { video.currentTime = target; } catch (error) { /* Some streams do not accept seeking. */ }
+    }
+    updateTimeline();
+  }
+
+  function seek(amount) {
+    if (!canSeek()) return;
+    var base = pendingSeek === null ? video.currentTime : pendingSeek;
+    pendingSeek = Math.max(0, Math.min(Math.floor(video.duration), base + amount));
+    showPanel(false);
+    clearTimeout(seekTimer);
+    seekTimer = setTimeout(commitSeek, 180);
+  }
+
+  timelineInput.addEventListener('input', function () {
+    clearTimeout(seekTimer);
+    pendingSeek = Number(timelineInput.value);
+    showPanel(false);
+  });
+  timelineInput.addEventListener('change', function () {
+    pendingSeek = Number(timelineInput.value);
+    commitSeek();
+  });
+  timelineInput.addEventListener('pointercancel', function () {
+    pendingSeek = null;
+    updateTimeline();
+  });
 
   function play(item, next, episodes) {
     saveProgress();
     var previous = playing;
+    if (!previous) resetArtwork();
     playing = { item: item, next: next, episodes: episodes, candidates: playbackCandidates(item),
       index: 0, attempt: 0, focusKey: previous ? previous.focusKey : document.activeElement.getAttribute('data-focus') };
     player.hidden = false;
@@ -743,9 +870,11 @@
 
   function closePlayer() {
     if (!playing) return;
+    commitSeek();
     saveProgress();
     var key = playing.focusKey;
     playing = null;
+    resetTimeline();
     clearTimeout(playerTimer);
     clearTimeout(liveStartupTimer);
     video.pause();
@@ -764,13 +893,13 @@
     if (playing.item.alternateUrl) preferredLiveFormat = liveFormat(playing.candidates[playing.index]);
     playerStatus.textContent = '';
     refreshPanel(document.activeElement.getAttribute('data-focus'));
-    showPanel(!playerActions.contains(document.activeElement) && !playerPanel.hidden);
+    showPanel(!playerPanel.contains(document.activeElement) && !playerPanel.hidden);
   });
   video.addEventListener('pause', function () {
     if (!playing || video.ended || !playing.started) return;
     saveProgress();
     refreshPanel(document.activeElement.getAttribute('data-focus'));
-    showPanel(!playerActions.contains(document.activeElement));
+    showPanel(!playerPanel.contains(document.activeElement));
   });
   video.addEventListener('loadedmetadata', function () {
     if (!playing) return;
@@ -778,8 +907,12 @@
     if (entry && entry.position < video.duration - 3) {
       try { video.currentTime = entry.position; } catch (error) { /* Seeking is optional. */ }
     }
+    updateTimeline();
   });
+  video.addEventListener('durationchange', updateTimeline);
+  video.addEventListener('seeked', updateTimeline);
   video.addEventListener('timeupdate', function () {
+    if (playing && playing.item.kind !== 'live') updateTimeline();
     if (playing && playing.item.kind !== 'live' && Date.now() - (playing.saved || 0) > 10000) {
       playing.saved = Date.now();
       saveProgress();
@@ -800,6 +933,7 @@
   document.addEventListener('visibilitychange', function () {
     if (!playing || !document.hidden) return;
     clearTimeout(liveStartupTimer);
+    commitSeek();
     saveProgress();
     video.pause();
   });
@@ -842,8 +976,9 @@
     var bestScore = Infinity;
     for (var i = 0; i < candidates.length; i++) {
       var candidate = candidates[i];
-      if (active === candidate || candidate.disabled || !candidate.getClientRects().length) continue;
+      if (active === candidate || candidate.disabled) continue;
       var rect = candidate.getBoundingClientRect();
+      if (!rect.width || !rect.height) continue;
       var dx = (rect.left + rect.right - current.left - current.right) / 2;
       var dy = (rect.top + rect.bottom - current.top - current.bottom) / 2;
       var mainDistance = sign * (horizontal ? dx : dy);
@@ -874,6 +1009,27 @@
       if (code === 19) video.pause();
       if (code === 179) togglePlayback();
       return;
+    }
+    if (canSeek() && (code === 412 || code === 417)) {
+      event.preventDefault();
+      seek(code === 412 ? -10 : 30);
+      timelineInput.focus();
+      return;
+    }
+    if (canSeek() && (code === 38 || (active === timelineInput && !playerPanel.hidden))) {
+      if (code === 37 || code === 39) {
+        event.preventDefault();
+        seek(code === 37 ? -10 : 10);
+        return;
+      }
+      if (code === 38 || code === 40 || code === 13) {
+        event.preventDefault();
+        showPanel(false);
+        if (code === 40) playerActions.firstChild.focus();
+        else if (code === 13) commitSeek();
+        else timelineInput.focus();
+        return;
+      }
     }
     if (playing && playerPanel.hidden && (code === 13 || (code >= 37 && code <= 40))) {
       event.preventDefault();

@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="referrer" content="no-referrer">
-  <meta name="sousa-version" content="1.1.0">
+  <meta name="sousa-version" content="1.2.0">
   <title>Sousa TV</title>
   <link rel="stylesheet" href="style.css">
   <script defer src="catalog.js"></script>
@@ -22,6 +22,12 @@
     <div id="player-panel">
       <h1 id="playing-title"></h1>
       <p id="player-status" role="status"></p>
+      <div id="player-timeline" class="timeline" hidden>
+        <span id="timeline-elapsed">00:00</span>
+        <input id="timeline-position" data-focus="timeline" type="range" min="0" max="0" step="1"
+          value="0" aria-label="Posição da reprodução">
+        <span id="timeline-duration">00:00</span>
+      </div>
       <div class="actions" id="player-actions"></div>
     </div>
   </section>

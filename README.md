@@ -54,11 +54,13 @@ Se o IP mudar, atualize o endereço com `ares-setup-device.cmd --modify lg-sousa
 No PowerShell, execute os comandos abaixo. Use o nome exato do arquivo que você baixou.
 
 ```powershell
-ares-install.cmd --device lg-sousa "$env:USERPROFILE\Downloads\com.sousatv.player_1.1.0_all.ipk"
+ares-install.cmd --device lg-sousa "$env:USERPROFILE\Downloads\com.sousatv.player_1.2.0_all.ipk"
 ares-launch.cmd --device lg-sousa com.sousatv.player
 ```
 
 O **Sousa TV** fica disponível no menu inicial da LG. No app, escolha **Xtream Codes** e informe endereço do servidor, usuário e senha, ou escolha **URL da lista M3U** e informe o link completo. Use as setas e **OK** para navegar e **Voltar** para retornar ao catálogo.
+
+Em filmes e episódios, pressione **↑** para focar a linha do tempo. Use **←** e **→** para voltar ou avançar 10 segundos. Pressione **↓** para voltar aos botões do player. O ponteiro do Magic Remote também pode selecionar um ponto da barra.
 
 ### Manutenção
 
